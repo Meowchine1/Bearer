@@ -20,6 +20,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class AuthFilter extends GenericFilterBean {
+
+
     @Override
     public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
         HttpServletRequest httpRequest = (HttpServletRequest) servletRequest;
@@ -28,7 +30,7 @@ public class AuthFilter extends GenericFilterBean {
         String authHeader = httpRequest.getHeader("Authorization");
 
         if(authHeader != null){
-            String[] authheaderArr = authHeader.split("Bearer");
+            String[] authheaderArr = authHeader.split("Bearer ");
             if(authHeader.length() > 1 && authheaderArr[1] != null){
                 String token = authheaderArr[1];
                 try{
@@ -51,21 +53,6 @@ public class AuthFilter extends GenericFilterBean {
 
         }
         filterChain.doFilter(servletRequest, servletResponse);
-    }
-
-    private Map<String, String> generateJWTToken(User user){
-        long timestamp = System.currentTimeMillis();
-        String token = Jwts.builder().signWith(SignatureAlgorithm.HS256, Constants.API_SECRET_KEY)  //  podpis
-                .setIssuedAt(new Date(timestamp))
-                .setExpiration(new Date(timestamp + Constants.TOKEN_VALIDITY))
-                .claim("id", user.getUserId())
-                .claim("login", user.getLogin())
-                .claim("hash", user.getHash())
-                .claim("salt", user.getSalt())
-                .compact();
-        Map<String , String> map = new HashMap<>();
-        map.put("token", token);
-        return map;
     }
 
 }

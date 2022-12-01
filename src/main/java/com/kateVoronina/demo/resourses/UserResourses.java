@@ -1,21 +1,23 @@
 package com.kateVoronina.demo.resourses;
 
 import com.kateVoronina.demo.Constants;
+import com.kateVoronina.demo.domain.RefreshToken;
+import com.kateVoronina.demo.domain.TokenRefreshRequest;
 import com.kateVoronina.demo.domain.User;
+import com.kateVoronina.demo.services.JwtService;
 import com.kateVoronina.demo.services.UserService;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -24,36 +26,81 @@ public class UserResourses {
 
     @Autowired
     UserService userService;
+    @Autowired
+    JwtService jwtService;
 
+
+    @PostMapping("/refreshtoken")
+    public ResponseEntity<?> refreshtoken(HttpServletResponse response, @RequestBody Map<String, Object> tokenMap) {
+        String requestRefreshToken = (String) tokenMap.get("token");
+        User user = userService.getUserByLogin(getUsernameFromToken(requestRefreshToken));
+        if (jwtService.validateLogin(user.getLogin()) > 0){
+            //RefreshToken refreshToken = jwtService.findByToken(requestRefreshToken);
+            //User user = userService.getUserById(refreshToken.getId());
+
+            String accessToken = generateAccessJWTToken(user);
+            String newRefreshToken = doGenerateRefreshToken(user.getLogin());
+
+            jwtService.updateRefreshToken(user.getLogin(), newRefreshToken);
+            Cookie cookie = new Cookie("accessToken", accessToken);
+            cookie.setPath("/api/users/login");
+            cookie.setHttpOnly(true);
+            response.addCookie(cookie);
+
+            Cookie cookieRefresh = new Cookie("newrefreshtoken", newRefreshToken);
+            cookieRefresh.setPath("/api/users/*");
+            cookieRefresh.setHttpOnly(true);
+            response.addCookie(cookieRefresh);
+        }
+        return new ResponseEntity<>(HttpStatus.OK);
+    }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> loginUser(@RequestBody Map<String, Object> userMap) throws NoSuchAlgorithmException {
-
+    public ResponseEntity<Map<String, String>> loginUser(HttpServletResponse response, @RequestBody Map<String, Object> userMap) throws NoSuchAlgorithmException {
         String login = (String) userMap.get("login");
         String password = (String) userMap.get("password");
         User user = userService.validateUser(login, password);
-        Map<String, String> map = new HashMap<>();
-        map.put("token", generateAccessJWTToken(user));
-        return new ResponseEntity<>(map, HttpStatus.OK);
 
+        String accessToken = generateAccessJWTToken(user);
+        String refreshToken = doGenerateRefreshToken(user.getLogin());
+
+        Cookie cookie = new Cookie("accessToken", accessToken);
+        cookie.setPath("/api/users/login");
+        cookie.setHttpOnly(true);
+        response.addCookie(cookie);
+
+
+        if(jwtService.validateLogin(user.getLogin()) > 0){
+            Cookie cookieRefresh = new Cookie("refreshtoken", jwtService.getTokenById(user.getLogin()).trim());
+            cookieRefresh.setPath("/api/users/*");
+            cookieRefresh.setHttpOnly(true);
+            response.addCookie(cookieRefresh);
+
+        }
+        else{
+            Cookie cookieRefresh = new Cookie("refreshtoken", refreshToken);
+            cookieRefresh.setPath("/api/users/*");
+            cookieRefresh.setHttpOnly(true);
+            response.addCookie(cookieRefresh);
+            jwtService.createRefreshToken(user.getLogin(), refreshToken);//refresh
+        }
+
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
     @PostMapping("/register")
-    public ResponseEntity<Map<String, String>> registerUser(@RequestBody Map<String, Object> userMap) throws NoSuchAlgorithmException {
-
+    public ResponseEntity<Map<String, String>> registerUser(HttpServletResponse response,
+                                                             @RequestBody Map<String, Object> userMap) throws NoSuchAlgorithmException {
         String login = (String) userMap.get("login");
         String password = (String) userMap.get("password");
-
        User user = userService.registerUser(login, password);
-       String accessToken = generateAccessJWTToken(user);
-       String refreshToken = doGenerateRefreshToken(user);
-
-       Map<String, String> tokens = new HashMap<>();
-       tokens.put("acess token", accessToken);
-       tokens.put("refresh token", refreshToken);
-       return new ResponseEntity<>(tokens, HttpStatus.OK);
+       return new ResponseEntity<>(HttpStatus.OK);
     }
+    public String getUsernameFromToken(String token) {
+        Claims claims = Jwts.parser().setSigningKey(Constants.API_SECRET_KEY).parseClaimsJws(token).getBody();
+        return claims.getSubject();
 
+    }
 
     private  String generateAccessJWTToken(User user){
         long timestamp = System.currentTimeMillis();
@@ -69,20 +116,12 @@ public class UserResourses {
         return token;
     }
 
-    //Рефреш токен (RT) — эти токены выполняют только одну специфичную задачу — получение нового токена доступа.
-    // И на этот раз без сервера авторизации не обойтись. Они долгоживущие, но одноразовые.
+    public String doGenerateRefreshToken(String username) {
 
-    //Ключевая идея разделения токенов состоит в том, что, с одной стороны,
-    // токены авторизации позволяют нам легко проверять пользователя без участия сервера авторизации, просто сравнением подписей.
-    public String doGenerateRefreshToken(User user) {
-
-        return Jwts.builder().claim("id", user.getUserId())
-                .claim("login", user.getLogin())
-                .claim("hash", user.getHash())
-                .claim("salt", user.getSalt())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + Constants.TOKEN_VALIDITY))
-                .signWith(SignatureAlgorithm.HS512, Constants.API_SECRET_KEY).compact();
+        return Jwts.builder().setSubject(username).setIssuedAt(new Date())
+                .setExpiration(new Date((new Date()).getTime() + Constants.TOKEN_VALIDITY))
+                .signWith(SignatureAlgorithm.HS512, Constants.API_SECRET_KEY)
+                .compact();
 
     }
 

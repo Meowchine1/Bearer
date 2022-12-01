@@ -3,16 +3,11 @@ package com.kateVoronina.demo.services;
 import com.kateVoronina.demo.domain.User;
 import com.kateVoronina.demo.exceptions.EtAuthException;
 import com.kateVoronina.demo.repositories.UserRepository;
-import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
-import java.util.Arrays;
 
 @Service
 @Transactional
@@ -37,7 +32,7 @@ public class UserServiceImpl implements UserService{
     @Override
     public User registerUser(String login, String password) throws EtAuthException, NoSuchAlgorithmException {
         if(login != null & password != null){
-            if(userRepository.findByLogin(login) > 0){
+            if(userRepository.findCountByLogin(login) > 0){
                 throw new EtAuthException("Login already in use");
             }
             Integer userId = userRepository.create(login, password);
@@ -46,5 +41,17 @@ public class UserServiceImpl implements UserService{
         else{
             throw new EtAuthException("login and/or password are null objects");
         }
+    }
+
+    @Override
+    public  User getUserById(int id){
+        return userRepository.findById(id);
+
+    }
+
+    @Override
+    public  User getUserByLogin(String login){
+        return userRepository.findByLogin(login);
+
     }
 }

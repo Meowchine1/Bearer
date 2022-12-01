@@ -37,6 +37,7 @@ public class UserRepositoryImpl implements UserRepository{
 
     private static final String SQL_FIND_BY_LOGIN = "SELECT id, login, hash, salt " +
             " FROM public.information WHERE login = ?";
+
     @Autowired
     JdbcTemplate jdbcTemplate;
 
@@ -61,8 +62,14 @@ public class UserRepositoryImpl implements UserRepository{
     }
 
     @Override
-    public Integer findByLogin(String login) throws EtAuthException {
+    public Integer findCountByLogin(String login) throws EtAuthException {
         return jdbcTemplate.queryForObject(SQL_COUNT_BY_LOGIN, new Object[]{login}, Integer.class);
+
+    }
+
+    @Override
+    public User findByLogin(String login) throws EtAuthException {
+        return jdbcTemplate.queryForObject(SQL_FIND_BY_LOGIN, new Object[]{login}, userRowMapper);
 
     }
 
@@ -99,8 +106,6 @@ public class UserRepositoryImpl implements UserRepository{
        }
 
     }
-
-
     @Override
     public String getHashByLogin(String login) throws EtAuthException {
         try{
@@ -111,7 +116,6 @@ public class UserRepositoryImpl implements UserRepository{
         }
 
     }
-
 
     private RowMapper<User> userRowMapper = ((rs, rowNum) -> {
         return new User(rs.getInt("id"),

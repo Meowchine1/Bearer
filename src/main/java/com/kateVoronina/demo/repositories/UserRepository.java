@@ -7,7 +7,9 @@ public interface UserRepository {
 
     Integer create(String login, String hash);
 
-    Integer findByLogin(String login) throws EtAuthException;
+    Integer findCountByLogin(String login) throws EtAuthException;
+
+    User findByLogin(String login) throws EtAuthException;
 
     User findById(Integer id) throws EtAuthException;
 

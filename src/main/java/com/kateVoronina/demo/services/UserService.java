@@ -10,4 +10,8 @@ public interface UserService {
     User validateUser(String login, String password) throws EtAuthException, NoSuchAlgorithmException;
 
     User registerUser(String login, String password) throws EtAuthException, NoSuchAlgorithmException;
+
+    User getUserById(int id);
+
+    User getUserByLogin(String login);
 }
